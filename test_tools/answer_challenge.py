@@ -3,16 +3,6 @@ cid = ""
 IPFS_API_URL = "http://127.0.0.1:5010"
 IPFS_GATEWAY_URL = "http://127.0.0.1:8080"
 
-#计算CID文件大小
-def count_files(cid: str, timeout: int = 120) -> int:
-    try:
-        ret = requests.post(f"{IPFS_API_URL}/api/v0/object/stat?arg=" + cid, timeout=timeout)
-        ret = ret.json()
-        return ret["CumulativeSize"]
-    except requests.exceptions.Timeout:
-        return -1
-
-file_size = count_files(cid)
 #获得某个CID的叶子块
 def get_leaf_block(cid:str):
     url=f"{IPFS_API_URL}/api/v0/ls?arg=%s&headers=true&size=true" % cid
@@ -49,17 +39,6 @@ def devide_raw_base64(text: str):
     b_base64 = text[1::2]  # 获取奇数位置字符
     return a_base64, b_base64
 
-#生成挑战内容
-def creat_challenge(cid:str)->dict:
-    challenge = {}
-    challenge['cid'] = cid
-    challenge_base64_raw = list(devide_raw_base64(get_block_base64(random.choice(get_extremity_leaf_block_list(cid)))))
-    challenge['question'] = random.choice(challenge_base64_raw)
-    challenge_base64_raw.remove(challenge['question'])
-    challenge['answer'] = challenge_base64_raw[0]
-    return challenge
-
-#解题挑战
 def answer_challenge(challenge:dict)->str:
     challenge_cid = challenge['cid']
     leaf_blocks = get_extremity_leaf_block_list(challenge_cid)
@@ -75,33 +54,15 @@ def answer_challenge(challenge:dict)->str:
                     pass
     return true_answer
 
-#Bench Code
-x = 3 #测试次数
+# 从JSON文件读取挑战
+with open('challenge.json', 'r') as file:
+    challenge = json.load(file)
 
-n = 1
-test_time_list = []
-while n <= x:
-    print("[Round %s]" % str(n))
-    print("生成挑战")
-    get_challenge_start_time = time.time()
-    challenge = creat_challenge(cid)
-    get_challenge_end_time = time.time()
-    print("挑战生成完毕，耗时：")
-    print(get_challenge_end_time - get_challenge_start_time)
-    answer = answer_challenge(challenge)
-    answer_time = time.time()
-    if answer == challenge['answer']:
-        print("挑战验证成功！耗时:")
-        print(answer_time - get_challenge_end_time)
-        print("计算速度为：")
-        print(str(file_size / (answer_time - get_challenge_end_time)) + " Bytes/S")
-        test_time_list.append(file_size / (answer_time - get_challenge_end_time))
-    else:
-        print("挑战验证失败！")
-        exit()
-    n = n + 1
-print("平均计算速度为：")
-time_sum = 0
-for i in test_time_list:
-    time_sum = time_sum +i 
-print(str(time_sum/len(test_time_list)) + " Bytes/S")
+start_time = time.time()
+answer = answer_challenge(challenge)
+end_time = time.time()
+
+if answer == challenge['answer']:
+    print("挑战验证成功！耗时:", end_time - start_time)
+else:
+    print("挑战验证失败！")
