@@ -1,13 +1,14 @@
 import requests,json,random,base64,time
-cid = "Qmab3TamGkysC25qiWUU1Xd21YEZzRRsCnzXaZ8agGdUZA"
+cid = ""
+IPFS_API_URL = "http://127.0.0.1:5010"
+IPFS_GATEWAY_URL = "http://127.0.0.1:8080"
 
 #计算CID文件大小
-def count_files(cid:str,timeout:int = 120)->int:
+def count_files(cid: str, timeout: int = 120) -> int:
     try:
-        ret = requests.post("http://127.0.0.1:5010/api/v0/object/stat?arg=" + cid,timeout=timeout)
+        ret = requests.post(f"{IPFS_API_URL}/api/v0/object/stat?arg=" + cid, timeout=timeout)
         ret = ret.json()
         return ret["CumulativeSize"]
-        #files = ipfs_list(cid,timeout=timeout)
     except requests.exceptions.Timeout:
         return -1
 
@@ -18,30 +19,25 @@ def get_leaf_block(cid:str):
     cids = eval(requests.post(url).text)['Objects'][0]['Links']
     return cids
 #获得某个CID的所有末端叶子块
-def get_extremity_leaf_block_list(cid:str):
-    not_leaf_blocks_list = get_leaf_block(cid)
+def get_extremity_leaf_block_list(cid: str):
+    queue = [cid]
     leaf_blocks_list = []
-    while not_leaf_blocks_list:
-        i = not_leaf_blocks_list.pop(0)
-        if i['Type'] == 1:
-            leafs = get_leaf_block(i['Hash'])
-            for leaf in leafs:
-                not_leaf_blocks_list.append(leaf)
-        elif i['Type'] == 2:
-            if int(i['Size']) <= 262144:
-                if get_leaf_block(i['Hash']) == []:
-                    leaf_blocks_list.append(i['Hash'])
-                else:
-                    leafs = get_leaf_block(i['Hash'])
-                    for leaf in leafs:
-                        not_leaf_blocks_list.append(leaf)
+
+    while queue:
+        current_cid = queue.pop(0)
+        url = f"{IPFS_API_URL}/api/v0/ls?arg={current_cid}&headers=true&size=true"
+        response = requests.post(url)
+        links = response.json()['Objects'][0]['Links']
+
+        for link in links:
+            if link['Type'] == 2 and int(link['Size']) <= 262144:
+                if not get_leaf_block(link['Hash']):  # 如果没有子块，则为叶子块
+                    leaf_blocks_list.append(link['Hash'])
             else:
-                leafs = get_leaf_block(i['Hash'])
-                for leaf in leafs:
-                    not_leaf_blocks_list.append(leaf)
-        else:
-            pass
+                queue.append(link['Hash'])
+
     return leaf_blocks_list
+
 #将末端叶子块转化为Base64形式编码
 def get_block_base64(cid:str):
     url="http://127.0.0.1:8080/ipfs/%s" % cid
@@ -49,22 +45,10 @@ def get_block_base64(cid:str):
     return str(base64.b64encode(data),encoding='utf-8')
 
 #奇偶分离Base64编码后的数据用以生成挑战问题与答案
-def devide_raw_base64(text:str):
-    textl = list(text)
-    a_base64_textlist = []
-    b_base64_textlist = []
-    for n in range(0,len(textl)):
-        if (n % 2) == 0:
-            a_base64_textlist.append(textl[n])
-        else:
-            b_base64_textlist.append(textl[n])
-    a_base64 = ""
-    b_base64 = ""
-    for i in a_base64_textlist:
-        a_base64 = a_base64 + i
-    for q in b_base64_textlist:
-        b_base64 = b_base64 + q
-    return a_base64,b_base64
+def devide_raw_base64(text: str):
+    a_base64 = text[::2]  # 获取偶数位置字符
+    b_base64 = text[1::2]  # 获取奇数位置字符
+    return a_base64, b_base64
 
 #生成挑战内容
 def creat_challenge(cid:str)->dict:
@@ -122,21 +106,3 @@ time_sum = 0
 for i in test_time_list:
     time_sum = time_sum +i 
 print(str(time_sum/len(test_time_list)) + " Bytes/S")
-
-
-# print(random.choice(get_extremity_leaf_block_list(cid)))
-# for i in get_extremity_leaf_block_list(cid):
-#     url="http://127.0.0.1:5010/api/v0/ls?arg=%s&headers=true&size=true" % i
-#     if eval(requests.post(url).text)['Objects'][0]['Links'] == []:
-#         pass
-#     else:
-#         print("逻辑验证错误！")
-#         print(i)
-#         exit()
-# print("逻辑验证成功")
-    
-
-# json_str = json.dumps(challenge, indent=4) # 缩进4字符
-# with open("sample.json", 'w') as json_file:
-# 	json_file.write(json_str)
-
