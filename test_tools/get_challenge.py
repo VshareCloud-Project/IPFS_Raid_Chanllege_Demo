@@ -19,24 +19,23 @@ def get_random_number():
 
 #获得随机的n个末端叶子块
 def get_random_leaf_block_list(cid: str, max_leaf_blocks: int):
-    not_leaf_blocks_list = get_leaf_block(cid)
+    if get_leaf_block(cid) == []:
+        return [cid]
+
+    top_leaf_blocks_list = get_leaf_block(cid)
     leaf_blocks_list = []
 
-    while not_leaf_blocks_list and len(leaf_blocks_list) < max_leaf_blocks:
-        current_block = random.choice(not_leaf_blocks_list)
-        # 检查是否是末端叶子块
-        if current_block['Type'] == 2 and int(current_block['Size']) <= 262144 and current_block['Hash'] not in not_leaf_blocks_list:
-            if get_leaf_block(current_block['Hash']) == []:
-                leaf_blocks_list.append(current_block['Hash'])
-            else:
-                # 如果不是末端叶子块，决定是否进入
-                if random.choice([True, False]):
-                    leafs = get_leaf_block(current_block['Hash'])
-                    not_leaf_blocks_list.extend(leafs)
-        elif current_block['Type'] == 1:
-            if random.choice([True, False]):
-                leafs = get_leaf_block(current_block['Hash'])
-                not_leaf_blocks_list.extend(leafs)
+    while top_leaf_blocks_list and len(leaf_blocks_list) < max_leaf_blocks:
+        current_block = random.choice(top_leaf_blocks_list)
+        top_leaf_blocks_list.remove(current_block)
+
+        while current_block['Type'] != 2 or int(current_block['Size']) > 262144 or get_leaf_block(current_block['Hash']) != []:
+            child_blocks = get_leaf_block(current_block['Hash'])
+            if not child_blocks:  # 如果没有更多的子块，跳出内部循环
+                break
+            current_block = random.choice(child_blocks)
+
+        leaf_blocks_list.append(current_block['Hash'])
     print(leaf_blocks_list)
     return leaf_blocks_list
 
@@ -45,6 +44,7 @@ def select_leaf_blocks_by_drand(leaf_blocks_list):
     leaf_blocks_list.sort()  # 按字母顺序排序
     round_number = get_random_number()
     selected_index = round_number % len(leaf_blocks_list)
+    print(f"随机数：{round_number}, 选中的叶子块：{leaf_blocks_list[selected_index]}")
     return leaf_blocks_list[selected_index]
 
 #将末端叶子块转化为Base64形式编码
@@ -70,7 +70,7 @@ def creat_challenge(cid: str,max_leaf_blocks: int)->dict:
     return challenge
 
 cid = ""
-max_leaf_blocks = 10 #最大叶子块数量
+max_leaf_blocks = 5 #最大叶子块数量
 
 start_time = time.time()
 challenge = creat_challenge(cid,max_leaf_blocks)
